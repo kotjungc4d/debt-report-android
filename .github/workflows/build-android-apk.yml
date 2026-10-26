@@ -12,194 +12,907 @@ jobs:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Verify or Generate Android Gradle Project Files
+      - name: Generate Clean Standalone Android Project
         run: |
-          if [ ! -f "settings.gradle.kts" ]; then
-            cat << 'EOF' > settings.gradle.kts
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          rootProject.name = "DebtReport"
-          include(":app")
-          EOF
-          fi
-
-          if [ ! -f "build.gradle.kts" ]; then
-            cat << 'EOF' > build.gradle.kts
-          plugins {
-              id("com.android.application") version "8.5.2" apply false
-              id("org.jetbrains.kotlin.android") version "1.9.24" apply false
-          }
-          EOF
-          fi
-
-          if [ ! -f "gradle.properties" ]; then
-            cat << 'EOF' > gradle.properties
-          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
-          android.useAndroidX=true
-          kotlin.code.style=official
-          android.nonTransitiveRClass=true
-          EOF
-          fi
-
+          rm -rf app settings.gradle.kts build.gradle.kts gradle.properties
           mkdir -p app/src/main/java/com/fintech/debtreport
-
-          if [ ! -f "app/build.gradle.kts" ]; then
-            cat << 'EOF' > app/build.gradle.kts
-          plugins {
-              id("com.android.application")
-              id("org.jetbrains.kotlin.android")
-          }
-
-          android {
-              namespace = "com.fintech.debtreport"
-              compileSdk = 35
-
-              defaultConfig {
-                  applicationId = "com.fintech.debtreport"
-                  minSdk = 26
-                  targetSdk = 35
-                  versionCode = 12
-                  versionName = "1.2.0"
-              }
-
-              buildTypes {
-                  debug {
-                      applicationIdSuffix = ".debug"
-                      isDebuggable = true
-                  }
-              }
-              compileOptions {
-                  sourceCompatibility = JavaVersion.VERSION_17
-                  targetCompatibility = JavaVersion.VERSION_17
-              }
-              kotlinOptions {
-                  jvmTarget = "17"
-              }
-          }
-
-          dependencies {
-              implementation("androidx.core:core-ktx:1.13.1")
-              implementation("androidx.activity:activity-ktx:1.9.2")
-              implementation("androidx.webkit:webkit:1.11.0")
-          }
-          EOF
-          fi
-
-          if [ ! -f "app/src/main/AndroidManifest.xml" ]; then
-            cat << 'EOF' > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-              <uses-permission android:name="android.permission.VIBRATE" />
-              <application
-                  android:allowBackup="true"
-                  android:label="DebtReport"
-                  android:supportsRtl="true"
-                  android:usesCleartextTraffic="true"
-                  android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true"
-                      android:screenOrientation="portrait"
-                      android:configChanges="orientation|screenSize|keyboardHidden">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-          fi
-
-          if [ ! -f "app/src/main/java/com/fintech/debtreport/MainActivity.kt" ]; then
-            cat << 'EOF' > app/src/main/java/com/fintech/debtreport/MainActivity.kt
-          package com.fintech.debtreport
-
-          import android.annotation.SuppressLint
-          import android.app.Activity
-          import android.graphics.Color
-          import android.os.Build
-          import android.os.Bundle
-          import android.os.VibrationEffect
-          import android.os.Vibrator
-          import android.view.View
-          import android.view.WindowInsetsController
-          import android.webkit.JavascriptInterface
-          import android.webkit.WebChromeClient
-          import android.webkit.WebResourceRequest
-          import android.webkit.WebSettings
-          import android.webkit.WebView
-          import android.webkit.WebViewClient
-
-          class MainActivity : Activity() {
-              private lateinit var webView: WebView
-
-              @SuppressLint("SetJavaScriptEnabled")
-              override fun onCreate(savedInstanceState: Bundle?) {
-                  super.onCreate(savedInstanceState)
-                  window.statusBarColor = Color.parseColor("#090B0E")
-                  window.navigationBarColor = Color.parseColor("#090B0E")
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                      window.insetsController?.setSystemBarsAppearance(
-                          0,
-                          WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
-                      )
-                  }
-                  webView = WebView(this).apply {
-                      setBackgroundColor(Color.parseColor("#090B0E"))
-                      overScrollMode = View.OVER_SCROLL_NEVER
-                      settings.apply {
-                          javaScriptEnabled = true
-                          domStorageEnabled = true
-                          databaseEnabled = true
-                          cacheMode = WebSettings.LOAD_DEFAULT
-                          mediaPlaybackRequiresUserGesture = false
-                          allowFileAccess = true
-                          allowContentAccess = true
-                          setSupportZoom(false)
-                      }
-                      addJavascriptInterface(AndroidHapticBridge(this@MainActivity), "AndroidNativeBridge")
-                      webChromeClient = WebChromeClient()
-                      webViewClient = object : WebViewClient() {
-                          override fun shouldOverrideUrlLoading(
-                              view: WebView?,
-                              request: WebResourceRequest?
-                          ): Boolean = false
-                      }
-                      loadUrl("https://ais-pre-re33l6aaftlp3h5fymvshi-747894951104.asia-northeast1.run.app")
-                  }
-                  setContentView(webView)
-              }
-          }
-
-          class AndroidHapticBridge(private val activity: Activity) {
-              @JavascriptInterface
-              fun vibrate(durationMs: Long) {
-                  val vibrator = activity.getSystemService(Vibrator::class.java) ?: return
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                      vibrator.vibrate(VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE))
-                  } else {
-                      @Suppress("DEPRECATION")
-                      vibrator.vibrate(durationMs)
-                  }
-              }
-          }
-          EOF
-          fi
+          mkdir -p app/src/main/assets
+          printf '%s\n' \
+            'pluginManagement {' \
+            '    repositories {' \
+            '        google()' \
+            '        mavenCentral()' \
+            '        gradlePluginPortal()' \
+            '    }' \
+            '}' \
+            'dependencyResolutionManagement {' \
+            '    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)' \
+            '    repositories {' \
+            '        google()' \
+            '        mavenCentral()' \
+            '    }' \
+            '}' \
+            'rootProject.name = "DebtReport"' \
+            'include(":app")' \
+            > settings.gradle.kts
+          printf '%s\n' \
+            'plugins {' \
+            '    id("com.android.application") version "8.5.2" apply false' \
+            '    id("org.jetbrains.kotlin.android") version "1.9.24" apply false' \
+            '}' \
+            > build.gradle.kts
+          printf '%s\n' \
+            'org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8' \
+            'android.useAndroidX=true' \
+            'kotlin.code.style=official' \
+            'android.nonTransitiveRClass=true' \
+            > gradle.properties
+          printf '%s\n' \
+            'plugins {' \
+            '    id("com.android.application")' \
+            '    id("org.jetbrains.kotlin.android")' \
+            '}' \
+            '' \
+            'android {' \
+            '    namespace = "com.fintech.debtreport"' \
+            '    compileSdk = 34' \
+            '' \
+            '    defaultConfig {' \
+            '        applicationId = "com.fintech.debtreport"' \
+            '        minSdk = 24' \
+            '        targetSdk = 34' \
+            '        versionCode = 12' \
+            '        versionName = "1.2.0"' \
+            '    }' \
+            '' \
+            '    buildTypes {' \
+            '        debug {' \
+            '            isDebuggable = true' \
+            '        }' \
+            '        release {' \
+            '            isMinifyEnabled = false' \
+            '        }' \
+            '    }' \
+            '    compileOptions {' \
+            '        sourceCompatibility = JavaVersion.VERSION_17' \
+            '        targetCompatibility = JavaVersion.VERSION_17' \
+            '    }' \
+            '    kotlinOptions {' \
+            '        jvmTarget = "17"' \
+            '    }' \
+            '}' \
+            '' \
+            'dependencies {' \
+            '}' \
+            > app/build.gradle.kts
+          printf '%s\n' \
+            '<?xml version="1.0" encoding="utf-8"?>' \
+            '<manifest xmlns:android="http://schemas.android.com/apk/res/android">' \
+            '' \
+            '    <uses-permission android:name="android.permission.INTERNET" />' \
+            '    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />' \
+            '    <uses-permission android:name="android.permission.VIBRATE" />' \
+            '' \
+            '    <application' \
+            '        android:allowBackup="true"' \
+            '        android:label="DebtReport"' \
+            '        android:supportsRtl="true"' \
+            '        android:usesCleartextTraffic="true"' \
+            '        android:hardwareAccelerated="true"' \
+            '        android:theme="@android:style/Theme.DeviceDefault.NoActionBar">' \
+            '        <activity' \
+            '            android:name="com.fintech.debtreport.MainActivity"' \
+            '            android:exported="true"' \
+            '            android:configChanges="orientation|screenSize|keyboardHidden">' \
+            '            <intent-filter>' \
+            '                <action android:name="android.intent.action.MAIN" />' \
+            '                <category android:name="android.intent.category.LAUNCHER" />' \
+            '            </intent-filter>' \
+            '        </activity>' \
+            '    </application>' \
+            '' \
+            '</manifest>' \
+            > app/src/main/AndroidManifest.xml
+          printf '%s\n' \
+            'package com.fintech.debtreport' \
+            '' \
+            'import android.annotation.SuppressLint' \
+            'import android.app.Activity' \
+            'import android.content.Context' \
+            'import android.graphics.Color' \
+            'import android.os.Build' \
+            'import android.os.Bundle' \
+            'import android.os.VibrationEffect' \
+            'import android.os.Vibrator' \
+            'import android.view.View' \
+            'import android.view.Window' \
+            'import android.webkit.JavascriptInterface' \
+            'import android.webkit.WebChromeClient' \
+            'import android.webkit.WebResourceRequest' \
+            'import android.webkit.WebSettings' \
+            'import android.webkit.WebView' \
+            'import android.webkit.WebViewClient' \
+            'import android.widget.FrameLayout' \
+            'import android.widget.TextView' \
+            '' \
+            'class MainActivity : Activity() {' \
+            '    private var webView: WebView? = null' \
+            '' \
+            '    @SuppressLint("SetJavaScriptEnabled", "AddJavascriptInterface")' \
+            '    override fun onCreate(savedInstanceState: Bundle?) {' \
+            '        super.onCreate(savedInstanceState)' \
+            '' \
+            '        try {' \
+            '            requestWindowFeature(Window.FEATURE_NO_TITLE)' \
+            '        } catch (_: Throwable) {}' \
+            '' \
+            '        try {' \
+            '            window.statusBarColor = Color.parseColor("#050709")' \
+            '            window.navigationBarColor = Color.parseColor("#050709")' \
+            '        } catch (_: Throwable) {}' \
+            '' \
+            '        try {' \
+            '            val wv = WebView(this).apply {' \
+            '                setBackgroundColor(Color.parseColor("#050709"))' \
+            '                overScrollMode = View.OVER_SCROLL_NEVER' \
+            '                settings.apply {' \
+            '                    javaScriptEnabled = true' \
+            '                    domStorageEnabled = true' \
+            '                    databaseEnabled = true' \
+            '                    cacheMode = WebSettings.LOAD_DEFAULT' \
+            '                    mediaPlaybackRequiresUserGesture = false' \
+            '                    allowFileAccess = true' \
+            '                    allowContentAccess = true' \
+            '                    setSupportZoom(false)' \
+            '                    builtInZoomControls = false' \
+            '                    displayZoomControls = false' \
+            '                }' \
+            '                addJavascriptInterface(AndroidHapticBridge(applicationContext), "AndroidNativeBridge")' \
+            '                webChromeClient = WebChromeClient()' \
+            '                webViewClient = object : WebViewClient() {' \
+            '                    override fun shouldOverrideUrlLoading(' \
+            '                        view: WebView?,' \
+            '                        request: WebResourceRequest?' \
+            '                    ): Boolean = false' \
+            '                }' \
+            '            }' \
+            '            webView = wv' \
+            '            setContentView(wv)' \
+            '            wv.loadUrl("file:///android_asset/index.html")' \
+            '        } catch (e: Throwable) {' \
+            '            val fallback = FrameLayout(this).apply {' \
+            '                setBackgroundColor(Color.parseColor("#050709"))' \
+            '            }' \
+            '            val label = TextView(this).apply {' \
+            '                setTextColor(Color.WHITE)' \
+            '                textSize = 15f' \
+            '                setPadding(48, 96, 48, 48)' \
+            '                text = "DebtReport Error: " + (e.message ?: "WebView unavailable")' \
+            '            }' \
+            '            fallback.addView(label)' \
+            '            setContentView(fallback)' \
+            '        }' \
+            '    }' \
+            '' \
+            '    @Deprecated("Deprecated in Java")' \
+            '    override fun onBackPressed() {' \
+            '        try {' \
+            '            val wv = webView' \
+            '            if (wv != null && wv.canGoBack()) {' \
+            '                wv.goBack()' \
+            '                return' \
+            '            }' \
+            '        } catch (_: Throwable) {}' \
+            '        super.onBackPressed()' \
+            '    }' \
+            '}' \
+            '' \
+            'class AndroidHapticBridge(private val appContext: Context) {' \
+            '    @JavascriptInterface' \
+            '    fun vibrate(durationMs: Long) {' \
+            '        try {' \
+            '            @Suppress("DEPRECATION")' \
+            '            val vibrator = appContext.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator ?: return' \
+            '            val safeMs = durationMs.coerceAtLeast(10L)' \
+            '            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {' \
+            '                vibrator.vibrate(' \
+            '                    VibrationEffect.createOneShot(safeMs, VibrationEffect.DEFAULT_AMPLITUDE)' \
+            '                )' \
+            '            } else {' \
+            '                @Suppress("DEPRECATION")' \
+            '                vibrator.vibrate(safeMs)' \
+            '            }' \
+            '        } catch (_: Throwable) {}' \
+            '    }' \
+            '}' \
+            > app/src/main/java/com/fintech/debtreport/MainActivity.kt
+          printf '%s\n' \
+            '<!DOCTYPE html>' \
+            '<html lang="th">' \
+            '<head>' \
+            '<meta charset="UTF-8" />' \
+            '<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />' \
+            '<title>DebtReport</title>' \
+            '<style>' \
+            '  :root {' \
+            '    --bg: #050709;' \
+            '    --card: rgba(18, 23, 29, 0.72);' \
+            '    --inner: rgba(255, 255, 255, 0.045);' \
+            '    --border: rgba(255, 255, 255, 0.09);' \
+            '    --sage: #70B286;' \
+            '    --sage-hi: #88D49E;' \
+            '    --sage-bg: rgba(30, 51, 38, 0.55);' \
+            '    --amber: #E5A93C;' \
+            '    --coral: #E06C75;' \
+            '    --text: #F3F5F8;' \
+            '    --muted: #8A94A6;' \
+            '  }' \
+            '  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }' \
+            '  html, body {' \
+            '    margin: 0; padding: 0; width: 100%; height: 100%;' \
+            '    background: var(--bg); color: var(--text);' \
+            '    font-family: -apple-system, BlinkMacSystemFont, "Sukhumvit Set", "Noto Sans Thai", sans-serif;' \
+            '    overflow: hidden;' \
+            '  }' \
+            '  input, button { font-family: inherit; }' \
+            '  .app-shell {' \
+            '    position: relative; width: 100%; height: 100%;' \
+            '    display: flex; flex-direction: column; overflow: hidden;' \
+            '    background: radial-gradient(circle at 85% 5%, rgba(112,178,134,0.13), transparent 45%),' \
+            '                radial-gradient(circle at 10% 35%, rgba(30,51,38,0.35), transparent 50%),' \
+            '                #050709;' \
+            '  }' \
+            '  .main-scroll {' \
+            '    flex: 1; overflow-y: auto; padding: 14px 14px 110px;' \
+            '    scroll-behavior: smooth;' \
+            '  }' \
+            '  .glass-card {' \
+            '    background: var(--card);' \
+            '    border: 1px solid var(--border);' \
+            '    border-radius: 20px;' \
+            '    padding: 14px;' \
+            '    margin-bottom: 12px;' \
+            '    backdrop-filter: blur(20px) saturate(180%);' \
+            '    -webkit-backdrop-filter: blur(20px) saturate(180%);' \
+            '    box-shadow: 0 12px 32px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08);' \
+            '  }' \
+            '  .glass-inner {' \
+            '    background: var(--inner);' \
+            '    border: 1px solid rgba(255,255,255,0.07);' \
+            '    border-radius: 14px;' \
+            '    padding: 10px 12px;' \
+            '  }' \
+            '  .glass-transparent-btn {' \
+            '    width: 100%;' \
+            '    background: rgba(255,255,255,0.035);' \
+            '    border: 1px dashed rgba(136,212,158,0.38);' \
+            '    border-radius: 16px;' \
+            '    padding: 12px 14px;' \
+            '    color: var(--sage-hi);' \
+            '    font-size: 13px;' \
+            '    font-weight: 800;' \
+            '    cursor: pointer;' \
+            '    text-align: center;' \
+            '    margin-bottom: 12px;' \
+            '    transition: transform 0.15s, background 0.2s;' \
+            '  }' \
+            '  .glass-transparent-btn:active { transform: scale(0.98); background: rgba(112,178,134,0.14); }' \
+            '  .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }' \
+            '  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }' \
+            '  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }' \
+            '  .title-sm { font-size: 11px; font-weight: 700; color: var(--muted); }' \
+            '  .val-lg { font-size: 20px; font-weight: 900; letter-spacing: -0.02em; }' \
+            '  .val-md { font-size: 15px; font-weight: 800; }' \
+            '  .sage-text { color: var(--sage-hi); }' \
+            '  .amber-text { color: var(--amber); }' \
+            '  .coral-text { color: var(--coral); }' \
+            '  .chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 10px; }' \
+            '  .chips::-webkit-scrollbar { display: none; }' \
+            '  .chip {' \
+            '    border: 1px solid var(--border);' \
+            '    background: rgba(255,255,255,0.03);' \
+            '    color: var(--muted);' \
+            '    padding: 6px 11px;' \
+            '    border-radius: 12px;' \
+            '    font-size: 11px;' \
+            '    font-weight: 800;' \
+            '    white-space: nowrap;' \
+            '    cursor: pointer;' \
+            '  }' \
+            '  .chip.active {' \
+            '    background: var(--sage-bg);' \
+            '    color: var(--sage-hi);' \
+            '    border-color: var(--sage);' \
+            '  }' \
+            '  .debt-item {' \
+            '    display: flex; align-items: center; justify-content: space-between;' \
+            '    gap: 10px; padding: 12px; margin-bottom: 8px;' \
+            '    background: rgba(255,255,255,0.035);' \
+            '    border: 1px solid rgba(255,255,255,0.07);' \
+            '    border-radius: 16px;' \
+            '    transition: transform 0.18s, border-color 0.18s, background 0.18s;' \
+            '  }' \
+            '  .debt-item.dragging {' \
+            '    border-color: var(--sage-hi);' \
+            '    background: rgba(30,51,38,0.65);' \
+            '    transform: scale(1.02);' \
+            '    box-shadow: 0 10px 28px rgba(0,0,0,0.65);' \
+            '  }' \
+            '  .check-btn {' \
+            '    width: 26px; height: 26px; border-radius: 8px;' \
+            '    border: 2px solid var(--sage); background: transparent;' \
+            '    color: #000; font-weight: 900; display: flex; align-items: center; justify-content: center;' \
+            '    cursor: pointer; flex-shrink: 0;' \
+            '  }' \
+            '  .check-btn.paid { background: var(--sage); }' \
+            '  .icon-btn {' \
+            '    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);' \
+            '    color: var(--muted); border-radius: 10px; padding: 6px 8px;' \
+            '    font-size: 11px; font-weight: 800; cursor: pointer;' \
+            '  }' \
+            '  .dock-wrap {' \
+            '    position: fixed; left: 0; right: 0; bottom: 0;' \
+            '    padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));' \
+            '    background: linear-gradient(to top, rgba(0,0,0,0.95), rgba(0,0,0,0.6), transparent);' \
+            '    z-index: 30;' \
+            '  }' \
+            '  .liquid-dock {' \
+            '    display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;' \
+            '    padding: 6px; border-radius: 24px;' \
+            '    background: rgba(16, 22, 28, 0.78);' \
+            '    border: 1px solid rgba(255,255,255,0.14);' \
+            '    backdrop-filter: blur(28px) saturate(240%);' \
+            '    -webkit-backdrop-filter: blur(28px) saturate(240%);' \
+            '    box-shadow: 0 16px 40px rgba(0,0,0,0.75), inset 0 1px 1px rgba(255,255,255,0.18);' \
+            '  }' \
+            '  @keyframes dockPulse {' \
+            '    0% { box-shadow: inset 0 0 0 rgba(136,212,158,0), 0 0 0 rgba(112,178,134,0); }' \
+            '    50% { box-shadow: inset 0 0 18px rgba(136,212,158,0.42), 0 0 14px rgba(112,178,134,0.28); }' \
+            '    100% { box-shadow: inset 0 0 10px rgba(136,212,158,0.22), 0 0 8px rgba(112,178,134,0.14); }' \
+            '  }' \
+            '  .dock-btn {' \
+            '    border: 1px solid transparent; background: transparent;' \
+            '    color: var(--muted); border-radius: 18px; padding: 8px 4px;' \
+            '    display: flex; flex-direction: column; align-items: center; gap: 3px;' \
+            '    font-size: 11px; font-weight: 800; cursor: pointer;' \
+            '  }' \
+            '  .dock-btn.active {' \
+            '    background: linear-gradient(145deg, rgba(40,72,52,0.72), rgba(22,38,28,0.78));' \
+            '    border-color: rgba(136,212,158,0.45);' \
+            '    color: var(--sage-hi);' \
+            '    animation: dockPulse 1.8s infinite ease-in-out;' \
+            '  }' \
+            '  .modal-backdrop {' \
+            '    position: fixed; inset: 0; background: rgba(0,0,0,0.82);' \
+            '    backdrop-filter: blur(8px); z-index: 50;' \
+            '    display: flex; align-items: center; justify-content: center; padding: 16px;' \
+            '  }' \
+            '  .modal-card {' \
+            '    width: 100%; max-width: 380px; background: #0F1216;' \
+            '    border: 1px solid #232931; border-radius: 22px; padding: 18px;' \
+            '  }' \
+            '  .input-box {' \
+            '    width: 100%; background: #15191E; border: 1px solid #232931;' \
+            '    border-radius: 12px; padding: 10px 12px; color: var(--text);' \
+            '    font-size: 14px; font-weight: 700; margin-top: 4px; margin-bottom: 10px;' \
+            '  }' \
+            '  .primary-btn {' \
+            '    width: 100%; background: var(--sage); color: #000; border: none;' \
+            '    border-radius: 12px; padding: 11px; font-size: 13px; font-weight: 900; cursor: pointer;' \
+            '  }' \
+            '  .bar-track {' \
+            '    width: 100%; height: 8px; background: rgba(255,255,255,0.07);' \
+            '    border-radius: 99px; overflow: hidden; display: flex;' \
+            '  }' \
+            '</style>' \
+            '</head>' \
+            '<body>' \
+            '<div class="app-shell">' \
+            '  <div id="main-view" class="main-scroll"></div>' \
+            '  <div class="dock-wrap">' \
+            '    <nav class="liquid-dock">' \
+            '      <button class="dock-btn active" onclick="switchTab(0)" id="tab-btn-0"><span>🧾</span><span>หนี้สิน</span></button>' \
+            '      <button class="dock-btn" onclick="switchTab(1)" id="tab-btn-1"><span>💳</span><span>รายรับ-จ่าย</span></button>' \
+            '      <button class="dock-btn" onclick="switchTab(2)" id="tab-btn-2"><span>✨</span><span>สุขภาพเงิน</span></button>' \
+            '      <button class="dock-btn" onclick="switchTab(3)" id="tab-btn-3"><span>🕓</span><span>ประวัติ</span></button>' \
+            '    </nav>' \
+            '  </div>' \
+            '</div>' \
+            '<div id="modal-root"></div>' \
+            '' \
+            '<script>' \
+            'const STORAGE_KEY = '\''debt_report_datastore_v1'\'';' \
+            'const DEFAULT_STATE = {' \
+            '  baseBudget: 45000,' \
+            '  liveBalance: 22450,' \
+            '  selectedFilter: '\''HAS_AMOUNT'\'',' \
+            '  debts: [' \
+            '    { id: '\''d1'\'', title: '\''บัตรเครดิต KTC Proud'\'', amount: 4800, dueDate: '\''25 ต.ค.'\'', isPaid: true, isNextMonth: false, paidAt: '\''2026-10-25 08:30'\'' },' \
+            '    { id: '\''d2'\'', title: '\''ผ่อนคอนโด ลุมพินี'\'', amount: 8500, dueDate: '\''28 ต.ค.'\'', isPaid: true, isNextMonth: false, paidAt: '\''2026-10-25 09:00'\'' },' \
+            '    { id: '\''d3'\'', title: '\''ค่าไฟ + เน็ตไฟเบอร์'\'', amount: 1650, dueDate: '\''29 ต.ค.'\'', isPaid: false, isNextMonth: false },' \
+            '    { id: '\''d4'\'', title: '\''บัตรเครดิต SCB JCB'\'', amount: 3890, dueDate: '\''30 ต.ค.'\'', isPaid: false, isNextMonth: false },' \
+            '    { id: '\''d5'\'', title: '\''Apple One + Netflix'\'', amount: 899, dueDate: '\''31 ต.ค.'\'', isPaid: false, isNextMonth: false },' \
+            '    { id: '\''d6'\'', title: '\''ประกันรถยนต์ชั้น 1 (เดือนหน้า)'\'', amount: 3200, dueDate: '\''15 พ.ย.'\'', isPaid: false, isNextMonth: true }' \
+            '  ],' \
+            '  cashflows: [' \
+            '    { id: '\''c1'\'', title: '\''ข้าวกะเพราหมูกรอบ + ไข่ดาว'\'', amount: 145, type: '\''EXPENSE'\'', timeLabel: '\''12:15'\'' },' \
+            '    { id: '\''c2'\'', title: '\''เติมน้ำมันมอเตอร์ไซค์'\'', amount: 300, type: '\''EXPENSE'\'', timeLabel: '\''14:20'\'' },' \
+            '    { id: '\''c3'\'', title: '\''รับงานฟรีแลนซ์ออกแบบกราฟิก'\'', amount: 4500, type: '\''INCOME'\'', timeLabel: '\''16:40'\'' },' \
+            '    { id: '\''c4'\'', title: '\''ชาบูบุฟเฟต์กับเพื่อน'\'', amount: 680, type: '\''EXPENSE'\'', timeLabel: '\''19:10'\'' }' \
+            '  ],' \
+            '  archives: [' \
+            '    { id: '\''a1'\'', monthLabel: '\''กันยายน 2026'\'', totalDebt: 18900, paidDebt: 18900, finalSaved: 11200, healthScore: 84 }' \
+            '  ]' \
+            '};' \
+            '' \
+            'let state = loadState();' \
+            'let activeTab = 0;' \
+            'let dragIdx = null;' \
+            '' \
+            'function loadState() {' \
+            '  try {' \
+            '    const raw = localStorage.getItem(STORAGE_KEY);' \
+            '    if (raw) {' \
+            '      const parsed = JSON.parse(raw);' \
+            '      if (parsed && Array.isArray(parsed.debts)) return parsed;' \
+            '    }' \
+            '  } catch (e) {}' \
+            '  return JSON.parse(JSON.stringify(DEFAULT_STATE));' \
+            '}' \
+            '' \
+            'function saveState() {' \
+            '  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}' \
+            '}' \
+            '' \
+            'function haptic(ms) {' \
+            '  try {' \
+            '    if (window.AndroidNativeBridge && window.AndroidNativeBridge.vibrate) {' \
+            '      window.AndroidNativeBridge.vibrate(ms || 18);' \
+            '    } else if (navigator.vibrate) {' \
+            '      navigator.vibrate(ms || 18);' \
+            '    }' \
+            '  } catch (e) {}' \
+            '}' \
+            '' \
+            'function fmt(n) { return Number(n || 0).toLocaleString('\''th-TH'\''); }' \
+            '' \
+            'function buildArcPath(cx, cy, r, pct) {' \
+            '  const clamped = Math.max(0, Math.min(100, pct));' \
+            '  if (clamped <= 0) return '\''M '\'' + cx + '\'' '\'' + (cy - r);' \
+            '  if (clamped >= 100) {' \
+            '    return '\''M '\'' + cx + '\'' '\'' + (cy - r) + '\'' A '\'' + r + '\'' '\'' + r + '\'' 0 1 1 '\'' + cx + '\'' '\'' + (cy + r) + '\'' A '\'' + r + '\'' '\'' + r + '\'' 0 1 1 '\'' + cx + '\'' '\'' + (cy - r);' \
+            '  }' \
+            '  const angle = (clamped / 100) * 360 - 90;' \
+            '  const rad = (angle * Math.PI) / 180;' \
+            '  const ex = (cx + r * Math.cos(rad)).toFixed(2);' \
+            '  const ey = (cy + r * Math.sin(rad)).toFixed(2);' \
+            '  const largeArc = clamped > 50 ? 1 : 0;' \
+            '  return '\''M '\'' + cx + '\'' '\'' + (cy - r) + '\'' A '\'' + r + '\'' '\'' + r + '\'' 0 '\'' + largeArc + '\'' 1 '\'' + ex + '\'' '\'' + ey;' \
+            '}' \
+            '' \
+            'function switchTab(idx) {' \
+            '  haptic(15);' \
+            '  activeTab = idx;' \
+            '  for (let i = 0; i < 4; i++) {' \
+            '    const btn = document.getElementById('\''tab-btn-'\'' + i);' \
+            '    if (btn) btn.className = '\''dock-btn'\'' + (i === idx ? '\'' active'\'' : '\'''\'');' \
+            '  }' \
+            '  render();' \
+            '}' \
+            '' \
+            'function render() {' \
+            '  saveState();' \
+            '  const root = document.getElementById('\''main-view'\'');' \
+            '  if (!root) return;' \
+            '' \
+            '  const currentDebts = state.debts.filter(d => !d.isNextMonth);' \
+            '  const totalDebt = currentDebts.reduce((s, d) => s + d.amount, 0);' \
+            '  const paidDebt = currentDebts.filter(d => d.isPaid).reduce((s, d) => s + d.amount, 0);' \
+            '  const unpaidDebt = Math.max(0, totalDebt - paidDebt);' \
+            '  const paidPct = totalDebt > 0 ? Math.round((paidDebt / totalDebt) * 100) : 100;' \
+            '  const dailySpend = Math.max(0, Math.floor((state.liveBalance - unpaidDebt) / 7));' \
+            '  const urgencyRatio = state.liveBalance > 0 ? Math.min(1, unpaidDebt / state.liveBalance) : 1;' \
+            '  const ringColor = urgencyRatio > 0.6 ? '\''#E5A93C'\'' : urgencyRatio > 0.25 ? '\''#9CC46B'\'' : '\''#70B286'\'';' \
+            '' \
+            '  if (activeTab === 0) {' \
+            '    let filtered = currentDebts;' \
+            '    if (state.selectedFilter === '\''UNPAID'\'') filtered = currentDebts.filter(d => !d.isPaid);' \
+            '    else if (state.selectedFilter === '\''PAID'\'') filtered = currentDebts.filter(d => d.isPaid);' \
+            '    else if (state.selectedFilter === '\''NEXT_MONTH'\'') filtered = state.debts.filter(d => d.isNextMonth);' \
+            '' \
+            '    const trackPath = buildArcPath(46, 46, 36, 100);' \
+            '    const progPath = buildArcPath(46, 46, 36, paidPct);' \
+            '' \
+            '    root.innerHTML = `' \
+            '      <div class="glass-card">' \
+            '        <div class="row">' \
+            '          <div>' \
+            '            <div class="title-sm">รายงานหนี้สิน & สภาพคล่อง</div>' \
+            '            <div class="val-lg sage-text">฿${fmt(state.liveBalance)}</div>' \
+            '            <div class="title-sm" style="margin-top:2px;">ใช้ได้จริงวันละ <span class="sage-text">฿${fmt(dailySpend)}</span> (เหลือ 7 วัน)</div>' \
+            '          </div>' \
+            '          <svg width="92" height="92" viewBox="0 0 92 92" style="overflow:visible;">' \
+            '            <defs>' \
+            '              <filter id="glow0" x="-30%" y="-30%" width="160%" height="160%">' \
+            '                <feGaussianBlur stdDeviation="3.5" result="b"/>' \
+            '                <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>' \
+            '              </filter>' \
+            '            </defs>' \
+            '            <path d="${trackPath}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="8" stroke-linecap="round"/>' \
+            '            <path d="${progPath}" fill="none" stroke="${ringColor}" stroke-width="8" stroke-linecap="round" filter="url(#glow0)"/>' \
+            '            <text x="46" y="45" text-anchor="middle" fill="#F3F5F8" font-size="16" font-weight="900">${paidPct}%</text>' \
+            '            <text x="46" y="59" text-anchor="middle" fill="#8A94A6" font-size="9" font-weight="700">เคลียร์แล้ว</text>' \
+            '          </svg>' \
+            '        </div>' \
+            '        <div class="grid-3" style="margin-top:12px;">' \
+            '          <div class="glass-inner" onclick="openBalanceModal('\''BASE_BUDGET'\'')" style="cursor:pointer;">' \
+            '            <div class="title-sm">งบตั้งต้น ✎</div>' \
+            '            <div class="val-md">฿${fmt(state.baseBudget)}</div>' \
+            '          </div>' \
+            '          <div class="glass-inner" onclick="openBalanceModal('\''LIVE_BALANCE'\'')" style="cursor:pointer;">' \
+            '            <div class="title-sm">เงินคงเหลือ ✎</div>' \
+            '            <div class="val-md sage-text">฿${fmt(state.liveBalance)}</div>' \
+            '          </div>' \
+            '          <div class="glass-inner">' \
+            '            <div class="title-sm">หนี้รอจ่าย</div>' \
+            '            <div class="val-md amber-text">฿${fmt(unpaidDebt)}</div>' \
+            '          </div>' \
+            '        </div>' \
+            '      </div>' \
+            '' \
+            '      <button class="glass-transparent-btn" onclick="openAddDebtModal()">' \
+            '        เพิ่มรายการหนี้สิน / บิลเดือนนี้หรือเดือนหน้า' \
+            '      </button>' \
+            '' \
+            '      <div class="chips">' \
+            '        <button class="chip ${state.selectedFilter==='\''HAS_AMOUNT'\''?'\''active'\'':'\'''\''}" onclick="setFilter('\''HAS_AMOUNT'\'')">เดือนนี้ (${currentDebts.length})</button>' \
+            '        <button class="chip ${state.selectedFilter==='\''UNPAID'\''?'\''active'\'':'\'''\''}" onclick="setFilter('\''UNPAID'\'')">ยังไม่จ่าย (${currentDebts.filter(d=>!d.isPaid).length})</button>' \
+            '        <button class="chip ${state.selectedFilter==='\''PAID'\''?'\''active'\'':'\'''\''}" onclick="setFilter('\''PAID'\'')">จ่ายแล้ว (${currentDebts.filter(d=>d.isPaid).length})</button>' \
+            '        <button class="chip ${state.selectedFilter==='\''NEXT_MONTH'\''?'\''active'\'':'\'''\''}" onclick="setFilter('\''NEXT_MONTH'\'')">เดือนหน้า (${state.debts.filter(d=>d.isNextMonth).length})</button>' \
+            '      </div>' \
+            '' \
+            '      <div class="title-sm" style="margin-bottom:8px;">💡 กดค้างที่รายการหรือกดปุ่ม ⇅ เพื่อเลื่อนลำดับขึ้น-ลง</div>' \
+            '' \
+            '      <div id="debt-list" ontouchmove="handleDebtTouchMove(event)">' \
+            '        ${filtered.map((d) => `' \
+            '          <div class="debt-item ${draggingDebtId===d.id?'\''dragging'\'':'\'''\''}" data-id="${d.id}"' \
+            '               ontouchstart="handleLongPressStart(event, '\''${d.id}'\'')"' \
+            '               ontouchend="handleLongPressEnd()"' \
+            '               ontouchcancel="handleLongPressEnd()">' \
+            '            <div style="display:flex;align-items:center;gap:10px;min-width:0;">' \
+            '              <button class="check-btn ${d.isPaid?'\''paid'\'':'\'''\''}" onclick="toggleDebt('\''${d.id}'\'')">${d.isPaid?'\''✓'\'':'\'''\''}</button>' \
+            '              <div style="min-width:0;">' \
+            '                <div style="font-size:14px;font-weight:800;${d.isPaid?'\''text-decoration:line-through;color:#8A94A6;'\'':'\'''\''}">${d.title}</div>' \
+            '                <div class="title-sm">กำหนด ${d.dueDate} ${d.isPaid ? '\''· จ่ายแล้ว'\'' : '\'''\''}</div>' \
+            '              </div>' \
+            '            </div>' \
+            '            <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">' \
+            '              <div style="text-align:right;margin-right:4px;">' \
+            '                <div style="font-size:14px;font-weight:900;color:${d.isPaid?'\''#88D49E'\'':'\''#E5A93C'\''};">฿${fmt(d.amount)}</div>' \
+            '              </div>' \
+            '              <button class="icon-btn" onclick="moveDebt('\''${d.id}'\'', -1)" aria-label="เลื่อนขึ้น">↑</button>' \
+            '              <button class="icon-btn" onclick="moveDebt('\''${d.id}'\'', 1)" aria-label="เลื่อนลง">↓</button>' \
+            '              <button class="icon-btn" onclick="deleteDebt('\''${d.id}'\'')" style="color:#E06C75;">✕</button>' \
+            '            </div>' \
+            '          </div>' \
+            '        `).join('\'''\'')}' \
+            '      </div>' \
+            '    `;' \
+            '  } else if (activeTab === 1) {' \
+            '    const totalExp = state.cashflows.filter(c => c.type === '\''EXPENSE'\'').reduce((s, c) => s + c.amount, 0);' \
+            '    const totalInc = state.cashflows.filter(c => c.type === '\''INCOME'\'').reduce((s, c) => s + c.amount, 0);' \
+            '    root.innerHTML = `' \
+            '      <div class="glass-card">' \
+            '        <div class="title-sm">กระแสเงินสดรายวัน (Cashflow)</div>' \
+            '        <div class="val-lg sage-text" style="margin:4px 0;">฿${fmt(state.liveBalance)}</div>' \
+            '        <div class="grid-2" style="margin-top:8px;">' \
+            '          <div class="glass-inner">' \
+            '            <div class="title-sm">รายรับเสริม</div>' \
+            '            <div class="val-md sage-text">+฿${fmt(totalInc)}</div>' \
+            '          </div>' \
+            '          <div class="glass-inner">' \
+            '            <div class="title-sm">รายจ่ายกินใช้</div>' \
+            '            <div class="val-md coral-text">-฿${fmt(totalExp)}</div>' \
+            '          </div>' \
+            '        </div>' \
+            '      </div>' \
+            '' \
+            '      <div class="glass-card">' \
+            '        <div style="font-size:13px;font-weight:900;margin-bottom:8px;">จดรายรับ / รายจ่ายด่วน</div>' \
+            '        <input id="cf-title" class="input-box" placeholder="ชื่อรายการ เช่น กาแฟ, ข้าวเที่ยง, ฟรีแลนซ์" />' \
+            '        <input id="cf-amount" class="input-box" type="number" inputmode="decimal" placeholder="จำนวนเงิน (บาท)" />' \
+            '        <div class="grid-2">' \
+            '          <button class="primary-btn" style="background:#E06C75;color:#fff;" onclick="addCashflow('\''EXPENSE'\'')">- บันทึกรายจ่าย</button>' \
+            '          <button class="primary-btn" onclick="addCashflow('\''INCOME'\'')">+ บันทึกรายรับ</button>' \
+            '        </div>' \
+            '      </div>' \
+            '' \
+            '      <div class="glass-card">' \
+            '        <div style="font-size:13px;font-weight:900;margin-bottom:10px;">รายการล่าสุด</div>' \
+            '        ${state.cashflows.map(c => `' \
+            '          <div class="debt-item">' \
+            '            <div>' \
+            '              <div style="font-size:13px;font-weight:800;">${c.title}</div>' \
+            '              <div class="title-sm">วันนี้ · ${c.timeLabel}</div>' \
+            '            </div>' \
+            '            <div style="display:flex;align-items:center;gap:8px;">' \
+            '              <span style="font-size:14px;font-weight:900;color:${c.type==='\''INCOME'\''?'\''#88D49E'\'':'\''#E06C75'\''};">' \
+            '                ${c.type==='\''INCOME'\''?'\''+'\'':'\''-'\''}฿${fmt(c.amount)}' \
+            '              </span>' \
+            '              <button class="icon-btn" onclick="deleteCashflow('\''${c.id}'\'')">✕</button>' \
+            '            </div>' \
+            '          </div>' \
+            '        `).join('\'''\'')}' \
+            '      </div>' \
+            '    `;' \
+            '  } else if (activeTab === 2) {' \
+            '    const dti = state.baseBudget > 0 ? Math.round((totalDebt / state.baseBudget) * 100) : 0;' \
+            '    const score = Math.max(15, Math.min(98, 100 - Math.round(dti * 0.45) - (unpaidDebt > 0 ? 8 : 0)));' \
+            '    const hColor = score >= 75 ? '\''#70B286'\'' : score >= 50 ? '\''#9CC46B'\'' : '\''#E5A93C'\'';' \
+            '    const trackPath = buildArcPath(52, 52, 42, 100);' \
+            '    const progPath = buildArcPath(52, 52, 42, score);' \
+            '' \
+            '    const statusLabel = score >= 70 ? '\''รอดตายแบบหล่อๆ 😎'\'' : score >= 45 ? '\''ปริ่มน้ำแต่ยังไหว 🛟'\'' : '\''กรอบยิ่งกว่าข้าวเกรียบ 🔥'\'';' \
+            '    const statusDesc = score >= 70' \
+            '      ? '\''หนี้ไม่ท่วมหัว แถมยังมีตังค์เหลือไปกินชาบูได้ไม่ต้องแอบปาดน้ำตา ถือว่าบริหารตังค์ได้ตึงจัด!'\''' \
+            '      : '\''ช่วงนี้เพลาๆ มือเรื่องเอฟของหน่อยนะลูกพี่ เคลียร์บิลที่ค้างก่อน เดี๋ยวสิ้นเดือนจะได้ไม่กินมาม่า!'\'';' \
+            '' \
+            '    root.innerHTML = `' \
+            '      <div class="glass-card">' \
+            '        <div class="row">' \
+            '          <div style="flex:1;">' \
+            '            <div class="title-sm">ดัชนีสุขภาพการเงิน</div>' \
+            '            <div style="font-size:18px;font-weight:900;color:${hColor};margin:4px 0;">${statusLabel}</div>' \
+            '            <div style="font-size:12px;line-height:1.5;color:#D5DCE6;">${statusDesc}</div>' \
+            '          </div>' \
+            '          <svg width="104" height="104" viewBox="0 0 104 104" style="overflow:visible;flex-shrink:0;">' \
+            '            <defs>' \
+            '              <filter id="glowHealth" x="-30%" y="-30%" width="160%" height="160%">' \
+            '                <feGaussianBlur stdDeviation="4" result="b"/>' \
+            '                <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>' \
+            '              </filter>' \
+            '            </defs>' \
+            '            <path d="${trackPath}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="9" stroke-linecap="round"/>' \
+            '            <path d="${progPath}" fill="none" stroke="${hColor}" stroke-width="9" stroke-linecap="round" filter="url(#glowHealth)"/>' \
+            '            <text x="52" y="50" text-anchor="middle" fill="#F3F5F8" font-size="20" font-weight="900">${score}</text>' \
+            '            <text x="52" y="65" text-anchor="middle" fill="#8A94A6" font-size="9" font-weight="700">คะแนนเต็ม 100</text>' \
+            '          </svg>' \
+            '        </div>' \
+            '      </div>' \
+            '' \
+            '      <div class="glass-card">' \
+            '        <div style="font-size:13px;font-weight:900;margin-bottom:10px;">คำแนะนำแบบกันเอง (ไม่วิชาการ)</div>' \
+            '        <div class="debt-item"><div>🟢 <strong>ภาระหนี้ต่อรายได้ (${dti}%):</strong> อยู่ในโซนชิลล์ๆ ยังหายใจคล่องคอ ไม่โดนดอกเบี้ยกินตับ</div></div>' \
+            '        <div class="debt-item"><div>⚡ <strong>บิลรอเชือด:</strong> เหลืออีก <strong>฿${fmt(unpaidDebt)}</strong> รีบกดเคลียร์ให้จบ จะได้รู้ว่าเหลือตังค์เที่ยวเท่าไหร่</div></div>' \
+            '        <div class="debt-item"><div>🍜 <strong>โควต้าสายเปย์รายวัน:</strong> ใช้ได้วันละไม่เกิน <strong>฿${fmt(dailySpend)}</strong> ห้ามวู่วามกดโค้ดส่วนลดตอนตีสอง!</div></div>' \
+            '      </div>' \
+            '    `;' \
+            '  } else {' \
+            '    const paidList = state.debts.filter(d => d.isPaid);' \
+            '    root.innerHTML = `' \
+            '      <div class="glass-card">' \
+            '        <div class="row" style="margin-bottom:10px;">' \
+            '          <div>' \
+            '            <div style="font-size:15px;font-weight:900;">คลังประวัติ & ปิดงบรายเดือน</div>' \
+            '            <div class="title-sm">บันทึกยอดหนี้ที่จ่ายแล้วเก็บไว้ดูย้อนหลัง</div>' \
+            '          </div>' \
+            '          <button class="primary-btn" style="width:auto;padding:8px 12px;" onclick="archiveMonth()">+ ปิดงบเดือนนี้</button>' \
+            '        </div>' \
+            '        ${state.archives.map(a => `' \
+            '          <div class="debt-item">' \
+            '            <div>' \
+            '              <div style="font-size:13px;font-weight:800;">📦 ${a.monthLabel}</div>' \
+            '              <div class="title-sm">จ่ายหนี้ครบ ฿${fmt(a.paidDebt)} · คะแนนสุขภาพ ${a.healthScore}/100</div>' \
+            '            </div>' \
+            '            <div class="sage-text" style="font-size:13px;font-weight:900;">ออมสุทธิ ฿${fmt(a.finalSaved)}</div>' \
+            '          </div>' \
+            '        `).join('\'''\'')}' \
+            '      </div>' \
+            '' \
+            '      <div class="glass-card">' \
+            '        <div style="font-size:13px;font-weight:900;margin-bottom:8px;">บิลที่เคลียร์เรียบร้อยแล้ว (${paidList.length})</div>' \
+            '        ${paidList.map(d => `' \
+            '          <div class="debt-item">' \
+            '            <div>' \
+            '              <div style="font-size:13px;font-weight:800;">✓ ${d.title}</div>' \
+            '              <div class="title-sm">ชำระเมื่อ ${d.paidAt || d.dueDate}</div>' \
+            '            </div>' \
+            '            <div class="sage-text" style="font-size:14px;font-weight:900;">฿${fmt(d.amount)}</div>' \
+            '          </div>' \
+            '        `).join('\'''\'')}' \
+            '      </div>' \
+            '    `;' \
+            '  }' \
+            '}' \
+            '' \
+            'function setFilter(f) { haptic(12); state.selectedFilter = f; render(); }' \
+            '' \
+            'function toggleDebt(id) {' \
+            '  haptic(25);' \
+            '  const item = state.debts.find(d => d.id === id);' \
+            '  if (!item) return;' \
+            '  item.isPaid = !item.isPaid;' \
+            '  if (item.isPaid) {' \
+            '    state.liveBalance = Math.max(0, state.liveBalance - item.amount);' \
+            '    item.paidAt = '\''วันนี้'\'';' \
+            '  } else {' \
+            '    state.liveBalance += item.amount;' \
+            '  }' \
+            '  render();' \
+            '}' \
+            '' \
+            'function deleteDebt(id) {' \
+            '  haptic(20);' \
+            '  state.debts = state.debts.filter(d => d.id !== id);' \
+            '  render();' \
+            '}' \
+            '' \
+            'function moveDebt(id, dir) {' \
+            '  haptic(15);' \
+            '  const idx = state.debts.findIndex(d => d.id === id);' \
+            '  if (idx < 0) return;' \
+            '  const target = idx + dir;' \
+            '  if (target < 0 || target >= state.debts.length) return;' \
+            '  const temp = state.debts[idx];' \
+            '  state.debts[idx] = state.debts[target];' \
+            '  state.debts[target] = temp;' \
+            '  render();' \
+            '}' \
+            '' \
+            'let pressTimer = null;' \
+            'let draggingDebtId = null;' \
+            'function handleLongPressStart(e, id) {' \
+            '  if (pressTimer) clearTimeout(pressTimer);' \
+            '  pressTimer = setTimeout(() => {' \
+            '    haptic(40);' \
+            '    draggingDebtId = id;' \
+            '    const el = document.querySelector('\''.debt-item[data-id="'\'' + id + '\''"]'\'');' \
+            '    if (el) el.classList.add('\''dragging'\'');' \
+            '  }, 320);' \
+            '}' \
+            'function handleDebtTouchMove(e) {' \
+            '  if (!draggingDebtId || !e.touches || !e.touches[0]) return;' \
+            '  e.preventDefault();' \
+            '  const t = e.touches[0];' \
+            '  const overEl = document.elementFromPoint(t.clientX, t.clientY);' \
+            '  const rowEl = overEl && overEl.closest ? overEl.closest('\''.debt-item'\'') : null;' \
+            '  if (!rowEl) return;' \
+            '  const overId = rowEl.getAttribute('\''data-id'\'');' \
+            '  if (!overId || overId === draggingDebtId) return;' \
+            '  const fromIdx = state.debts.findIndex(d => d.id === draggingDebtId);' \
+            '  const toIdx = state.debts.findIndex(d => d.id === overId);' \
+            '  if (fromIdx < 0 || toIdx < 0) return;' \
+            '  const moved = state.debts.splice(fromIdx, 1)[0];' \
+            '  state.debts.splice(toIdx, 0, moved);' \
+            '  haptic(12);' \
+            '  render();' \
+            '}' \
+            'function handleLongPressEnd() {' \
+            '  if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }' \
+            '  if (draggingDebtId) {' \
+            '    draggingDebtId = null;' \
+            '    render();' \
+            '  }' \
+            '}' \
+            '' \
+            'function addCashflow(type) {' \
+            '  const titleEl = document.getElementById('\''cf-title'\'');' \
+            '  const amtEl = document.getElementById('\''cf-amount'\'');' \
+            '  const title = titleEl ? titleEl.value.trim() : '\'''\'';' \
+            '  const amount = amtEl ? parseFloat(amtEl.value) : 0;' \
+            '  if (!title || !amount || amount <= 0) return;' \
+            '  haptic(25);' \
+            '  const now = new Date();' \
+            '  const timeLabel = String(now.getHours()).padStart(2,'\''0'\'') + '\'':'\'' + String(now.getMinutes()).padStart(2,'\''0'\'');' \
+            '  state.cashflows.unshift({ id: '\''cf-'\'' + Date.now(), title, amount: Math.round(amount), type, timeLabel });' \
+            '  if (type === '\''INCOME'\'') state.liveBalance += Math.round(amount);' \
+            '  else state.liveBalance = Math.max(0, state.liveBalance - Math.round(amount));' \
+            '  render();' \
+            '}' \
+            '' \
+            'function deleteCashflow(id) {' \
+            '  haptic(18);' \
+            '  const target = state.cashflows.find(c => c.id === id);' \
+            '  if (target) {' \
+            '    if (target.type === '\''INCOME'\'') state.liveBalance = Math.max(0, state.liveBalance - target.amount);' \
+            '    else state.liveBalance += target.amount;' \
+            '  }' \
+            '  state.cashflows = state.cashflows.filter(c => c.id !== id);' \
+            '  render();' \
+            '}' \
+            '' \
+            'function archiveMonth() {' \
+            '  haptic(30);' \
+            '  const currentDebts = state.debts.filter(d => !d.isNextMonth);' \
+            '  const totalDebt = currentDebts.reduce((s, d) => s + d.amount, 0);' \
+            '  const paidDebt = currentDebts.filter(d => d.isPaid).reduce((s, d) => s + d.amount, 0);' \
+            '  state.archives.unshift({' \
+            '    id: '\''arch-'\'' + Date.now(),' \
+            '    monthLabel: '\''ตุลาคม 2026 (Snapshot)'\'',' \
+            '    totalDebt,' \
+            '    paidDebt,' \
+            '    finalSaved: state.liveBalance,' \
+            '    healthScore: 82' \
+            '  });' \
+            '  render();' \
+            '}' \
+            '' \
+            'function openAddDebtModal() {' \
+            '  haptic(15);' \
+            '  document.getElementById('\''modal-root'\'').innerHTML = `' \
+            '    <div class="modal-backdrop" onclick="closeModal(event)">' \
+            '      <div class="modal-card" onclick="event.stopPropagation()">' \
+            '        <div style="font-size:15px;font-weight:900;margin-bottom:10px;">เพิ่มรายการหนี้สิน / บิลใหม่</div>' \
+            '        <label class="title-sm">ชื่อรายการ</label>' \
+            '        <input id="m-title" class="input-box" placeholder="เช่น บัตรเครดิต, ค่าเน็ต, ผ่อนรถ" />' \
+            '        <label class="title-sm">ยอดชำระ (บาท)</label>' \
+            '        <input id="m-amount" class="input-box" type="number" inputmode="decimal" placeholder="0" />' \
+            '        <label class="title-sm">กำหนดชำระ</label>' \
+            '        <input id="m-due" class="input-box" value="30 ต.ค." />' \
+            '        <div class="grid-2" style="margin-top:8px;">' \
+            '          <button class="icon-btn" style="padding:11px;" onclick="closeModal()">ยกเลิก</button>' \
+            '          <button class="primary-btn" onclick="saveNewDebt()">บันทึกรายการ</button>' \
+            '        </div>' \
+            '      </div>' \
+            '    </div>' \
+            '  `;' \
+            '}' \
+            '' \
+            'function saveNewDebt() {' \
+            '  const title = document.getElementById('\''m-title'\'').value.trim();' \
+            '  const amount = parseFloat(document.getElementById('\''m-amount'\'').value);' \
+            '  const dueDate = document.getElementById('\''m-due'\'').value.trim() || '\''สิ้นเดือน'\'';' \
+            '  if (!title || !amount || amount <= 0) return;' \
+            '  haptic(25);' \
+            '  state.debts.unshift({' \
+            '    id: '\''d-'\'' + Date.now(),' \
+            '    title,' \
+            '    amount: Math.round(amount),' \
+            '    dueDate,' \
+            '    isPaid: false,' \
+            '    isNextMonth: false' \
+            '  });' \
+            '  closeModal();' \
+            '  render();' \
+            '}' \
+            '' \
+            'function openBalanceModal(mode) {' \
+            '  haptic(15);' \
+            '  const current = mode === '\''BASE_BUDGET'\'' ? state.baseBudget : state.liveBalance;' \
+            '  const label = mode === '\''BASE_BUDGET'\'' ? '\''ตั้งค่างบตั้งต้นประจำเดือน'\'' : '\''อัปเดตยอดเงินคงเหลือจริง'\'';' \
+            '  document.getElementById('\''modal-root'\'').innerHTML = `' \
+            '    <div class="modal-backdrop" onclick="closeModal(event)">' \
+            '      <div class="modal-card" onclick="event.stopPropagation()">' \
+            '        <div style="font-size:15px;font-weight:900;margin-bottom:10px;">${label}</div>' \
+            '        <input id="m-bal" class="input-box" type="number" inputmode="decimal" value="${current}" />' \
+            '        <div class="grid-2" style="margin-top:8px;">' \
+            '          <button class="icon-btn" style="padding:11px;" onclick="closeModal()">ยกเลิก</button>' \
+            '          <button class="primary-btn" onclick="saveBalance('\''${mode}'\'')">บันทึกยอดเงิน</button>' \
+            '        </div>' \
+            '      </div>' \
+            '    </div>' \
+            '  `;' \
+            '}' \
+            '' \
+            'function saveBalance(mode) {' \
+            '  const val = parseFloat(document.getElementById('\''m-bal'\'').value);' \
+            '  if (isNaN(val) || val < 0) return;' \
+            '  haptic(25);' \
+            '  if (mode === '\''BASE_BUDGET'\'') state.baseBudget = Math.round(val);' \
+            '  else state.liveBalance = Math.round(val);' \
+            '  closeModal();' \
+            '  render();' \
+            '}' \
+            '' \
+            'function closeModal() {' \
+            '  document.getElementById('\''modal-root'\'').innerHTML = '\'''\'';' \
+            '}' \
+            '' \
+            'render();' \
+            '</script>' \
+            '</body>' \
+            '</html>' \
+            > app/src/main/assets/index.html
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -213,7 +926,10 @@ jobs:
           gradle-version: '8.7'
 
       - name: Build Debug APK
-        run: gradle assembleDebug
+        run: |
+          gradle assembleDebug
+          test -f app/build/tmp/kotlin-classes/debug/com/fintech/debtreport/MainActivity.class
+          test -f app/build/outputs/apk/debug/app-debug.apk
 
       - name: Upload DebtReport APK Artifact
         uses: actions/upload-artifact@v4
